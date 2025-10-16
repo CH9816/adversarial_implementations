@@ -39,9 +39,6 @@ def get_train_test_split(dataset, split, bsize = 32, doShuffle = True):
     ]
 
 
-
-
-
 def getImageNet(
         dir = "imagenet",
         targetImgSize = 256, bsize = 32,
