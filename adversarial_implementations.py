@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     vgg16 = get_vgg16(True, gpu); print(vgg16)
 
-    imgnet = getImageNet(targetImgSize=224, shuffle=False)
+    imgnet = getImageNet(targetImgSize=224, shuffle=True)
 
     dp = get_datapoint(imgnet, device = gpu)[0]
 

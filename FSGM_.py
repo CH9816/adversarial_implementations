@@ -50,11 +50,12 @@ def fsgm_attack(
     # zero previous gradients
     model.zero_grad()
     datapoint.requires_grad = True
-    # if ground truth not known, 
-    # assume (maximised) model output is ground truth
 
 
     out = model(datapoint, raw_return = True)
+
+    # if ground truth not known, 
+    # assume (maximised) model output is ground truth
     if groundTruth is None:
         #groundTruth = torch.ones_like(out) * 0  
         groundTruth = torch.zeros_like(out)
