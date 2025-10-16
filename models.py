@@ -16,7 +16,7 @@ cpu, gpu = torch.device("cpu"), torch.device("cuda")
 # vgg that prints out top and bottom k classes
 # and automatically resizes and batches
 class VGG16_easy(nn.Module):
-    def __init__(self, vgg16_ : vgg16, returnK = 5, path = "imagenet"):
+    def __init__(self, vgg16_ : vgg16, returnK = 5, path = ""):
 
         super().__init__()
 
@@ -28,7 +28,8 @@ class VGG16_easy(nn.Module):
 
         self.inSize = 224
         
-        with open(self.path + r"/imagenet_labels.json", "r") as f:
+        #with open(self.path + r"/imagenet_labels.json", "r") as f:
+        with open("imagenet_labels.json", "r") as f:
             self.classJson = json.loads(f.read())
 
     def forward(self, x : torch.Tensor, raw_return = False):
