@@ -75,17 +75,3 @@ def getMNIST(
 
     return get_train_test_split(mnist, train_test_split, bsize, shuffle)
 
-    #if train_test_split is None:
-
-    #    dataset = DataLoader(mnist, bsize, shuffle)
-    #    return dataset;
-
-    #else:
-    #    size = len(mnist)
-    #    test = train_test_split * size
-    #    #train = (1 - train_test_split) * size
-    #    train = size - test
-    #    return [
-    #                DataLoader(x, bsize, shuffle) for x in 
-    #                    torch.utils.data.random_split(mnist, [int(train), int(test)])
-    #           ]

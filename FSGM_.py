@@ -30,15 +30,18 @@ def undo_data_norm(
 
 
 
-
+# https://arxiv.org/abs/1412.6572
 def fsgm_attack(
         model : nn.Module,
         datapoint : torch.Tensor, groundTruth = None,
         lossf = torch.nn.functional.mse_loss,
         eps = .001,
+        # data normalisation parameters
+        # default for imagenet
         mu_sigma = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         device = cpu
-    ):
+
+    ) -> torch.Tensor:
 
     # get model and datapoints in the right state
     model.eval()
