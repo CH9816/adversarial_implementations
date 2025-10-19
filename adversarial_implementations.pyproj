@@ -25,6 +25,7 @@
     <Compile Include="adversarial_implementations.py" />
     <Compile Include="datasets.py" />
     <Compile Include="FSGM_.py" />
+    <Compile Include="gui.py" />
     <Compile Include="models.py" />
     <Compile Include="torch_common.py" />
   </ItemGroup>

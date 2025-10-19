@@ -35,10 +35,11 @@ def fsgm_attack(
         model : nn.Module,
         datapoint : torch.Tensor, groundTruth = None,
         lossf = torch.nn.functional.mse_loss,
-        eps = .001,
+        eps = .01,
         # data normalisation parameters
         # default for imagenet
         mu_sigma = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        returnNoiseAdded = False,
         device = cpu
 
     ) -> torch.Tensor:
@@ -69,13 +70,16 @@ def fsgm_attack(
 
 
     # adversarial = original + eps * sign(grad)
-    adv = undo_data_norm(datapoint, *mu_sigma) + eps * gradient.sign()
-
+    noise = eps * gradient.sign()
+    adv = undo_data_norm(datapoint, *mu_sigma) + noise
 
     # re normalise and clamp data so that model interacts with it correctly
     adv = transforms.Normalize(*mu_sigma)(adv)
     adv = torch.clamp(adv, 0, 1)
 
-    return adv
+    #noise = transforms.Normalize(*mu_sigma)(noise)
+    #noise = torch.clamp(noise, 0, 1)
+
+    return adv if not returnNoiseAdded else (adv, gradient.sign())
 
 

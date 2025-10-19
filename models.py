@@ -71,7 +71,7 @@ class VGG16_easy(nn.Module):
 
             # bottom K
             [f"bottom {self.K} predictions;\n\n"] + [
-                f'- {self.classJson[str(i.item())]}, {round(float(out_soft[0][i] * 100), 100)}%\n'
+                f'- {self.classJson[str(i.item())]}, {round(float(out_soft[0][i] * 100), 4)}%\n'
                     for i in least_k_indices
             ]
             
