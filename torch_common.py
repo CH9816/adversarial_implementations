@@ -36,7 +36,20 @@ def showtensor(x):
 
 
 
+def undo_data_norm(
+        x : torch.Tensor,
+      
+        # imagenet
+        mu = [0.485, 0.456, 0.406], 
+        sigma = [0.229, 0.224, 0.225]
+    ):
 
+    device = x.device
+
+    mu    = torch.tensor(mu)[None, :, None, None].to(device)
+    sigma = torch.tensor(sigma)[None, :, None, None].to(device)
+
+    return x * sigma + mu
 
 
 

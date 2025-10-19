@@ -125,11 +125,13 @@ class Adversarial_GUI:
             
 
         if self.currentImage is not None:
-            model = self.model.to(self.device)
-            self.currentOutString_original = model(self.currentImage.to(self.device))
+            with torch.no_grad():
+                model = self.model.to(self.device)
+                self.currentOutString_original = model(self.currentImage.to(self.device))
             
         if self.currentAdv is not None:
-            self.currentOutString_adversarial = self.model(self.currentAdv.to(self.device))
+            with torch.no_grad():
+                self.currentOutString_adversarial = self.model(self.currentAdv.to(self.device))
            
 
         else:
@@ -159,7 +161,7 @@ class Adversarial_GUI:
 
 
         if self.scroll != 0:
-            self.eps += self.scroll / 1000
+            self.eps = max(0, self.eps + self.scroll / (10 if isP("shift") else 1000))
 
 
 

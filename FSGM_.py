@@ -3,26 +3,14 @@ from torch import Tensor, nn
 
 from torchvision import transforms
 
+from torch_common import undo_data_norm
 
 
 cpu, gpu = torch.device("cpu"), torch.device("cuda")
 
 
 
-def undo_data_norm(
-        x : torch.Tensor,
-      
-        # imagenet
-        mu = [0.485, 0.456, 0.406], 
-        sigma = [0.229, 0.224, 0.225]
-    ):
 
-    device = x.device
-
-    mu    = torch.tensor(mu)[None, :, None, None].to(device)
-    sigma = torch.tensor(sigma)[None, :, None, None].to(device)
-
-    return x * sigma + mu
 
 
 
@@ -51,6 +39,7 @@ def fsgm_attack(
     # zero previous gradients
     model.zero_grad()
     datapoint.requires_grad = True
+
 
 
     out = model(datapoint, raw_return = True)

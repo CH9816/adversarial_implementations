@@ -27,6 +27,7 @@
     <Compile Include="FSGM_.py" />
     <Compile Include="gui.py" />
     <Compile Include="models.py" />
+    <Compile Include="feature_map_.py" />
     <Compile Include="torch_common.py" />
   </ItemGroup>
   <ItemGroup>
