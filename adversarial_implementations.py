@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
     gui = Adversarial_GUI(vgg16, imgnet, feature_map_attack_repeated, device = gpu)
     gui.main(); quit()
-    
+    sadasda
     
 
 

@@ -27,7 +27,7 @@ def feature_map_loss_rec(output : Tensor, target : Tensor):
     return rec_abs_diff.mean()
 
 
-def feature_map_loss_rec_exp_exaggerated(output : Tensor, target : Tensor, scale = 10):
+def feature_map_loss_rec_exp_exaggerated(output : Tensor, target : Tensor, scale = 2):
     rec_abs_diff = 1. / (output - target + EPSILON_DIV).abs()
     exp_val = torch.exp(scale * rec_abs_diff) - 1.
     return exp_val.mean()
@@ -95,8 +95,10 @@ def get_gradient_image_fm_towards_desired(
             #    torch.save(inp[0], f)
             #quit()
 
+            out = inp[0]
+            #print(out.shape, desired.shape); quit()
 
-            l = lossf(inp[0], desired)
+            l = lossf(out, desired)
             l.backward()
             grad.append(x.grad.data)
         return hook
@@ -215,32 +217,123 @@ def get_feature_map(
 
 
 
+from lpips import LPIPS
+
+perceptual_lossf = LPIPS(net='alex')
 
 
+
+def get_gradient_magnitude_mask(model : nn.Module, datapoint : Tensor, desired_model_out : Tensor) -> Tensor:
+    
+    X = datapoint.clone().detach().requires_grad_(True)
+    desired_model_out = desired_model_out.clone().detach()
+    
+    out = model(X)
+    #loss = torch.nn.functional.mse_loss(out, desired_model_out)
+    loss = high_power_loss(out, desired_model_out)
+
+    #print(out.shape, desired_model_out.shape); quit()
+
+    loss.backward()
+
+    grad = X.grad.data
+
+    #grad[grad > .1] = 0
+    
+
+    mask = grad.abs() / grad.abs().max()
+
+    #showtensor(mask); quit()
+
+    #threshold = .1
+
+    #mask[mask < threshold] = 0
+    #mask[mask > .5] = 1
+
+    #return torch.ones_like(mask)
+    return mask
+
+
+    #k=STOP_K_BEFORE
+    #Xs = []
+
+    #def get_hook():
+    #    def hook(module, inp, outp): 
+    #        inp[0] = inp[0].detach().requires_grad_(True)
+    #        Xs.append(inp[0])
+    #    return hook
+    #hook = list(model.modules())[-k].register_forward_hook(get_hook())
+    
+    #X = datapoint.clone().detach().requires_grad_(False)
+
+    #out = model(X)
+
+    #loss = torch.nn.functional.mse_loss(out, desired_model_out)
+    #loss.backward()
+
+
+    #grad = X.grad.data
+
+    #grad = grad.abs() / grad.max()
+
+    
+    #hook.remove()
+
+
+    #return grad
+
+
+
+
+def elem_multip__keeping_mag(first : Tensor, second : Tensor):
+
+    mag = first.abs().mean().sqrt()
+    out = torch.mul(first, second)
+    mag_after = out.abs().mean().sqrt()
+
+    eps = 1e-10
+    
+    out_scaled = out * (mag / (mag_after + eps))
+
+
+
+    return out_scaled
+    #return torch.mul(first, second)
+
+
+def high_power_loss(inp : Tensor, target : Tensor) -> Tensor:
+    return torch.nn.functional.mse_loss(inp, target).pow(3)
 
 
 def feature_map_attack_repeated(
         model : nn.Module,
         datapoint : torch.Tensor, 
 
-        #target = None,
-        target = "target.pt",
+        target = None,
+        #target = "target.pt",
 
-        lossf = torch.nn.functional.smooth_l1_loss,
+        lossf = torch.nn.functional.mse_loss,
+        #lossf = perceptual_lossf,
+
         eps = .01,
         # data normalisation parameters
         # default for imagenet
         mu_sigma = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         returnNoiseAdded = False, Ns = None,
-        device = cpu,
+        try_correct = True,
+        device = gpu,
         data = None
 
     ) -> torch.Tensor:
 
+    perceptual_lossf_ = perceptual_lossf.to(device)
+
     model = model.to(device).eval()
     out = model(datapoint, raw_return = True)
+    original_out = out.clone()
     class_ = torch.argmax(out) 
     class_out = class_.clone()
+    model_out = out.clone()
 
     if Ns == -1: Ns = 1_000_000_000
 
@@ -253,22 +346,25 @@ def feature_map_attack_repeated(
 
     original_feature_map = get_feature_map(model, datapoint)
     away_feature_map = original_feature_map.clone()
+    
+    desired_out = None
 
     if target is not None:
         desired_img = torch.load(target)
         out = model(desired_img, raw_return = True)
+        desired_out = out.clone()
         class_target = torch.argmax(out)
         desired_fm = get_feature_map(model, desired_img)
 
 
     n = 0
     noiseSum = torch.zeros_like(datapoint)
-    current_datapoint_weight = .7 if target is None else .98
+    current_datapoint_weight = .7 if target is None else .97
     #current_datapoint_weight = 1
-    n_fully_forward = 15
-    top_k_to_ignore_away = 2
+    n_fully_forward = 5
+    top_k_to_ignore_away = 0
+    stop_when_target_in_top = 1
 
-    # e-6 to 7 works the best
     noise_mag = 1e-7
 
     #noise_add = torch.randn_like(datapoint)
@@ -279,7 +375,11 @@ def feature_map_attack_repeated(
 
     check_every = 20
 
+    grad_pre_perc = None
 
+    feature_map_dict = {}
+
+    #print(list(torch.topk(model_out[0], stop_when_target_in_top))); quit()
 
     # either iterate a set amount of times (Ns), or till the network is fooled / target class is achieved
     while                                       \
@@ -289,7 +389,8 @@ def feature_map_attack_repeated(
             (class_ == class_out 
                 if target is None else 
         
-             class_out != class_target):
+             #class_out != class_target):
+             class_target not in list(torch.topk(model_out[0], stop_when_target_in_top)[1])):
 
 
 
@@ -327,22 +428,44 @@ def feature_map_attack_repeated(
 
             else:
                 # away_feature_map = get_feature_map(model, datapoint)
-                gradient_away = get_gradient_image_fm_away_original(model, datapoint.clone().detach(), original_feature_map,
-                                                                    feature_map_loss_rec, device)
+
+                if n <= n_fully_forward:
+                    gradient_away = get_gradient_image_fm_away_original(model, datapoint.clone().detach(), original_feature_map,
+                                                                        feature_map_loss_rec, device)
                 
-                multip = min(.98, n / n_fully_forward)
+                    multip = min(1, n / n_fully_forward)
 
-                gradient_away = gradient_away.sign() * gradient_towards.mean()
-                #gradient_away = gradient_away / gradient_away.max() * gradient_towards.max()
+                    gradient_away = gradient_away.sign() * gradient_towards.mean()
+                    #gradient_away = gradient_away / gradient_away.max() * gradient_towards.max()
 
-                gradient = gradient_away * (1-multip) + gradient_towards * multip
+                    gradient = gradient_away * (1-multip) + gradient_towards * multip
 
 
+                else:
+                    gradient = gradient_towards
+        
 
+            max_class = torch.argmax(out)
+
+            if max_class != class_target and out[0][max_class] > .5:
+
+                if class_target not in feature_map_dict:
+                    X_ans = get_X_given_ans(model, class_target, datapoint.shape, 1e-2, 10, device)
+                    feature_map_dict[class_target] = get_feature_map(model, X_ans.clone().detach())
+                    print("new")
+
+
+                X_fm = feature_map_dict[class_target]
+
+                gradient_away_specific = get_gradient_image_fm_away_original(model, datapoint.clone().detach(), X_fm, device = device)
+
+                gradient_away_specific = gradient_away_specific.sign() * gradient_towards.mean()
+
+                #gradient = gradient * .8 + gradient_away_specific * .2
+                gradient = gradient_away_specific
 
         
 
-        noise = eps * gradient * -1.
 
         #mean = noise.abs().mean()
         #maxx = noise.abs().max()
@@ -351,14 +474,60 @@ def feature_map_attack_repeated(
         if n == 0 or n % check_every == 0 and target is not None:
             datapoint_pre_update = datapoint.clone().detach()
 
-        datapoint = datapoint + noise
-
-        datapoint = datapoint * current_datapoint_weight + datapoint_pre_adv * (1. - current_datapoint_weight)
-
-        datapoint = datapoint + noise_add * noise_mag
 
 
-        noiseSum += noise.clone()
+        # get grad of datapoint towards perceptual loss of original
+
+        
+
+
+
+        gradient_scaled = eps * gradient * -1.
+
+        #mag_mask = None
+        mag_mask = get_gradient_magnitude_mask(model.model, datapoint, desired_out if desired_out is not None else (1. - original_out))
+        gradient_scaled = elem_multip__keeping_mag(gradient_scaled, mag_mask) if mag_mask is not None else gradient_scaled
+
+
+
+        X_ = datapoint_pre_adv.clone().detach().requires_grad_(True).to(datapoint.device)
+
+        datapoint = datapoint + gradient_scaled
+
+        if try_correct:
+
+            #datapoint_after = datapoint.clone().detach().requires_grad_(True).to(datapoint.device)
+            ploss = perceptual_lossf_(datapoint, X_).to(datapoint.device)
+            ploss.backward(retain_graph = True)
+            #ploss.backward()
+            grad_pre_perc = X_.grad.data
+            #grad_pre_perc = grad_pre_perc / grad_pre_perc.abs().max()
+
+            #print(grad_towards_original); quit()
+
+            #grad_towards_original_perceptual = torch.mul(grad_towards_original_perceptual, (1. - mag_mask))
+            grad_pre_perc = elem_multip__keeping_mag(grad_pre_perc, (1. - mag_mask)) if mag_mask is not None else grad_pre_perc
+
+            # 1e-5 -> 7
+            perc_noise = grad_pre_perc * eps * -1 * 1e-6
+            #noise_ = perc_noise + noise_add * noise_mag
+            noise_ = perc_noise # + noise_add * noise_mag
+
+            datapoint = datapoint + noise_
+
+            #datapoint = datapoint + grad_towards_original * eps * -1.
+            datapoint = datapoint * current_datapoint_weight + datapoint_pre_adv * (1. - current_datapoint_weight)
+
+
+
+
+
+
+        #datapoint = datapoint + noise_add * noise_mag
+        #datapoint = datapoint + noise_add
+
+
+        noiseSum += gradient_scaled.clone()
 
 
 
@@ -396,7 +565,7 @@ def feature_map_attack_repeated(
             #data = [n, datapoint_normalised]
             data[0] = n
             data[1] = datapoint_normalised
-            data[2] = noiseSum
+            data[2] = mag_mask
             sleep(.01)
 
             if not data[3]:
@@ -409,8 +578,65 @@ def feature_map_attack_repeated(
         if n > 1000 and False:
             break
 
+
+
+
+
+
+
+
+
+
+
+    adv = datapoint
+
+    original = datapoint_pre_adv
+    diff = adv - original
+    final = adv.clone()
+    last = adv.clone()
+
+    datapoint_normalised = torch.clamp(
+        transforms.Normalize(*mu_sigma)(final.clone())
+        , 0, 1    
+    )
+
+    model_out = model(datapoint_normalised, raw_return = True)
+
+
+    i = 0
+    i_inc = 1e-3
+    index = 0
+    while (
+            class_target in list(torch.topk(model_out[0], stop_when_target_in_top)[1])
+                if target is not None else
+            torch.argmax(model_out) != class_out
+        ):
+        last = final.clone()
+        #final = adv * (1-i) + original * (i)
+        final = original + (1-i) * diff
+        
+        datapoint_normalised = torch.clamp(
+            transforms.Normalize(*mu_sigma)(final.clone())
+            , 0, 1    
+        )
+        model_out = model(datapoint_normalised, raw_return = True)
+        
+        i += i_inc
+        index += 1
+
+        if index % 10 == 0:
+            print(i)
+
+            data[1] = datapoint_normalised
+
+
+
+
+
+
+
     # re normalise and clamp data so that model interacts with it correctly
-    adv = transforms.Normalize(*mu_sigma)(datapoint)
+    adv = transforms.Normalize(*mu_sigma)(last)
     adv = torch.clamp(adv, 0, 1)
 
     #noise = transforms.Normalize(*mu_sigma)(noise)
@@ -423,6 +649,11 @@ def feature_map_attack_repeated(
     if data is not None:
         data[1] = adv
         data[2] = noiseSum
+
+
+
+
+
 
     return adv if not returnNoiseAdded else (adv, noiseSum)
 

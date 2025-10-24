@@ -276,7 +276,7 @@ class Adversarial_GUI:
 
 
         if self.scroll != 0:
-            self.eps = max(0, self.eps + self.scroll / (10 if isP("shift") else 10000))
+            self.eps = max(0, self.eps + self.scroll / (1 if isP("shift") else 10000))
 
 
         if isP(self.saveFmKey) and False:
