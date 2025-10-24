@@ -356,6 +356,8 @@ def feature_map_attack_repeated(
         class_target = torch.argmax(out)
         desired_fm = get_feature_map(model, desired_img)
 
+    else:
+        desired_out = (1. - original_out)
 
     n = 0
     noiseSum = torch.zeros_like(datapoint)
