@@ -228,7 +228,7 @@ def get_gradient_magnitude_mask(model : nn.Module, datapoint : Tensor, desired_m
     X = datapoint.clone().detach().requires_grad_(True)
     desired_model_out = desired_model_out.clone().detach()
     
-    out = model(X)
+    out = model(X, raw_return = True)
     #loss = torch.nn.functional.mse_loss(out, desired_model_out)
     loss = high_power_loss(out, desired_model_out)
 
@@ -302,15 +302,15 @@ def elem_multip__keeping_mag(first : Tensor, second : Tensor):
 
 
 def high_power_loss(inp : Tensor, target : Tensor) -> Tensor:
-    return torch.nn.functional.mse_loss(inp, target).pow(3)
+    return torch.nn.functional.mse_loss(inp, target).pow(2)
 
 
 def feature_map_attack_repeated(
         model : nn.Module,
         datapoint : torch.Tensor, 
 
-        target = None,
-        #target = "target.pt",
+        #target = None,
+        target = "target.pt",
 
         lossf = torch.nn.functional.mse_loss,
         #lossf = perceptual_lossf,
@@ -485,7 +485,7 @@ def feature_map_attack_repeated(
         gradient_scaled = eps * gradient * -1.
 
         #mag_mask = None
-        mag_mask = get_gradient_magnitude_mask(model.model, datapoint, desired_out if desired_out is not None else (1. - original_out))
+        mag_mask = get_gradient_magnitude_mask(model, datapoint, desired_out if desired_out is not None else (1. - original_out))
         gradient_scaled = elem_multip__keeping_mag(gradient_scaled, mag_mask) if mag_mask is not None else gradient_scaled
 
 
@@ -603,33 +603,65 @@ def feature_map_attack_repeated(
     model_out = model(datapoint_normalised, raw_return = True)
 
 
+
+
+    
+
+
+
     i = 0
     i_inc = 1e-3
     index = 0
-    while (
-            class_target in list(torch.topk(model_out[0], stop_when_target_in_top)[1])
-                if target is not None else
-            torch.argmax(model_out) != class_out
-        ):
+    while i_inc > 1e-20:
         last = final.clone()
-        #final = adv * (1-i) + original * (i)
-        final = original + (1-i) * diff
-        
+
+        #print(desired_out.shape); quit()
+        mask = get_gradient_magnitude_mask(model, last, desired_out)
+        #mask_ = torch.ones_like(mask)
+
+        mask[mask < i] = 0
+        mask[mask >= i] = 1
+
+        #final = original + (1-i) * diff
+        #m = (1-i) * mask_ + (i) * mask
+        m = mask
+        final = original + torch.mul(diff, m)
+
+
         datapoint_normalised = torch.clamp(
             transforms.Normalize(*mu_sigma)(final.clone())
             , 0, 1    
         )
         model_out = model(datapoint_normalised, raw_return = True)
         
-        i += i_inc
-        index += 1
 
-        if index % 10 == 0:
+
+        if index % 10 == 0 or True:
             print(i)
 
             data[1] = datapoint_normalised
 
 
+        if(
+                class_target not in list(torch.topk(model_out[0], stop_when_target_in_top)[1])
+                    if target is not None else
+                torch.argmax(model_out) == class_out
+            ):
+
+
+            # too far
+
+            #i = max(0, i - i_inc)
+            i -= i_inc
+            i_inc = i_inc / 2.
+
+            final = last.clone()
+            
+            print("back")
+
+        else:
+            i += i_inc
+            index += 1
 
 
 
